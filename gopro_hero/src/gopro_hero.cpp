@@ -72,7 +72,7 @@ namespace gopro_hero
                 ROS_ERROR_STREAM("FAILED to get image list!!");
                 return;
             }
-            ROS_DEBUG_STREAM("gpMediaList:" << mediaList);
+            ROS_DEBUG_STREAM("JSON:" << mediaList);
 
             if (!mediaList.empty() && reader.parse(mediaList, root))
                 {
@@ -113,14 +113,20 @@ namespace gopro_hero
         }
             break;
         case HTML: {
+            auto c(3);          // retry count
             std::string htmlMediaList;
-            if (!curlGetText("http://10.5.5.9/videos/DCIM/100GOPRO/", htmlMediaList, 2)) {
-                ROS_ERROR_STREAM("FAILED to get image list!!");
-                return;
-            }
             vector<std::string> imageFiles;
-            findImageFiles(htmlMediaList, imageFiles);
-            
+            while(c > 0 && imageFiles.empty()) {
+                if (!curlGetText("http://10.5.5.9/videos/DCIM/100GOPRO/", htmlMediaList, 2)) {
+                    ROS_ERROR_STREAM("FAILED to get image list!!");
+                    return;
+                }
+                ROS_DEBUG_STREAM("HTML(" << c << "):" << htmlMediaList);
+                findImageFiles(htmlMediaList, imageFiles);
+                c--;
+                if (!imageFiles.empty()) break;
+                ros::Duration(0.1).sleep();
+            }
             if (!imageFiles.empty()) {
                 for (int i = 0; i < imageFiles.size(); ++i) {
                     string path = "http://10.5.5.9/videos/DCIM/100GOPRO/" + imageFiles[i];
@@ -280,14 +286,14 @@ namespace gopro_hero
     void GoProHero::findImageFiles(const std::string& htmlMediaList, vector<std::string>& imageFiles)
     {
         try {
-            const boost::regex e("GOPR\\d\\d\\d\\d\\.JPG");
+            const boost::regex e("href=\"GOPR\\d\\d\\d\\d\\.JPG");
             boost::match_results<std::string::const_iterator> m;
             std::string::const_iterator start = htmlMediaList.begin();
             std::string::const_iterator end = htmlMediaList.end();
 
             while (boost::regex_search(start, end, m, e)) {
                 start = m[0].second;
-                std::string img = htmlMediaList.substr(std::distance(htmlMediaList.begin(), m[0].first), 12);
+                std::string img = htmlMediaList.substr(std::distance(htmlMediaList.begin(), m[0].first) + 6, 12);
                 ROS_DEBUG_STREAM("found image:" << img);
                 imageFiles.push_back(img);
             }

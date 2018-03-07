@@ -6,6 +6,8 @@
 #include "gopro_hero/gopro_hero.hpp"
 #include "gopro_hero/gopro_hero_commands.hpp"
 
+#define DELETE_ALL_MEDIA 1
+
 using namespace cv;
 using namespace std;
 using namespace ros;
@@ -64,6 +66,7 @@ namespace gopro_hero
         toggleVideoStream_ = nh_.subscribe("toggle_video_stream", 1, &GoProHeroNode::toggleVideoStreamCB, this);
         cameraSettingsSub_ = nh_.subscribe("camera_settings", 1, &GoProHeroNode::cameraSettingsCB, this);
         shutterTriggerSrv_ = nh_.advertiseService("trigger_shutter", &GoProHeroNode::triggerShutterCB, this);
+        // deleteAllMediaSrv_ = nh_.advertiseService("delete_all", &GoProHeroNode::deleteAllMediaCB, this);
     }
 
     
@@ -95,7 +98,7 @@ namespace gopro_hero
         {
             auto val = s.id;
             auto name = s.name;
-            
+            ROS_DEBUG_STREAM("setting - " << "name:" << name << ", value:" << val);
             if ("shutter" == name) gp_.shutter(val);
             else if ("orientation" == name) gp_.orientation(static_cast<Orientation>(val));
             else if ("ledBlink" == name) gp_.ledBlink(static_cast<LEDBlink>(val));
@@ -132,6 +135,9 @@ namespace gopro_hero
             else if ("exposure" == name) gp_.exposure(static_cast<Exposure>(val));
             else if ("spotMeter" == name) gp_.spotMeter(static_cast<SpotMeter>(val));
             else if ("photoResolution" == name) gp_.photoResolution(static_cast<PhotoResolution>(val));
+            else {
+              ROS_ERROR_STREAM("FAILED setting - " << "name:" << name << ", value:" << val);
+            }
         }
     }
 
@@ -157,7 +163,9 @@ namespace gopro_hero
             copy(i.begin(), i.end(), back_inserter(rosImg.data));
             rsp.images.push_back(rosImg);
         }
-        
+#ifdef DELETE_ALL_MEDIA
+        gp_.deleteAllMedia();
+#endif
         return true;
     }
 
