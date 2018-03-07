@@ -1,3 +1,5 @@
+/* -*- mode: c++; c-basic-offset: 4; indent-tabs-mode: nil; -*- */
+
 #ifndef GOPRO_HERO_HPP_
 #define GOPRO_HERO_HPP_
 
@@ -116,11 +118,15 @@ namespace gopro_hero {
         bool curlRequestUrl(const std::string url, std::string& readBuffer, long timeout = 10);
         
         std::string zeroPaddedIntString(std::string num, int pad);
-        
+
+        void findImageFiles(const std::string& htmlMediaList, std::vector<std::string>& imageFiles);
 
         const std::string base_ = GoProHeroCommands::commandBase();
         Mode mode_;
         bool saveOnDevice_;
+
+        enum ImageListFrom {JSON, HTML};
+        ImageListFrom imageListFrom_;
     };
 }
 

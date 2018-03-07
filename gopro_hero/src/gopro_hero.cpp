@@ -1,9 +1,15 @@
+/* -*- mode: c++; c-basic-offset: 4; indent-tabs-mode: nil; -*- */
+
+#include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
+#include <boost/regex.hpp>
 #include <boost/thread/thread.hpp>
 #include <jsoncpp/json/json.h>
 #include <jsoncpp/json/reader.h>
 
 #include <iostream>
+
+#include <ros/console.h>
 
 #include "gopro_hero/gopro_hero.hpp"
 
@@ -23,8 +29,24 @@ namespace gopro_hero
         mode_(Mode::PHOTO)
     {
         curl_global_init(CURL_GLOBAL_ALL);
-    }
 
+        if (std::getenv("IMAGE_LIST_FROM") != nullptr) {
+            std::string from(std::getenv("IMAGE_LIST_FROM"));
+            if (boost::iequals("JSON", from)) {
+                imageListFrom_ = JSON;
+            } else if (boost::iequals("HTML", from)) {
+                imageListFrom_ = HTML;
+            } else {
+                ROS_INFO_STREAM("Unknown format:" << from);
+                ROS_INFO_STREAM("Using default format: HTML");
+                imageListFrom_ = HTML;
+            }
+        } else {
+            ROS_DEBUG_STREAM("IMAGE_LIST_FROM env var not specified.");
+            ROS_DEBUG_STREAM("Using default format: HTML");
+            imageListFrom_ = HTML;
+        }
+    }
 
     /// Destructor
     /// \note clean up curl
@@ -39,32 +61,79 @@ namespace gopro_hero
     /// \param timeout the amount of time to wait for the images
     /// \todo verify that images are jpegs
     void GoProHero::currentImages(vector<vector<unsigned char> >& images, long timeout) {
-        Json::Value root;
-        Json::Reader reader;
-        std::string mediaList;
-        
-        if (!curlGetText("http://10.5.5.9/gp/gpMediaList", mediaList, 2)) return;
-        cout << mediaList << endl;
 
-        if (!mediaList.empty() && reader.parse(mediaList, root))
-        {
-            const Json::Value media = root["media"][0]["fs"];
-            const Json::Value lastVal = media[media.size() - 1];
-            
-            // TODO Check that it's a JPG
-            
-            int startNum = stoi(lastVal["b"].asString());
-            int endNum = stoi(lastVal["l"].asString());
-            for (int i=startNum; i<=endNum; ++i)
-            {
-                string path = "http://10.5.5.9/videos/DCIM/100GOPRO/G" +
-                    zeroPaddedIntString(lastVal["g"].asString(), 3) +
-                    zeroPaddedIntString(to_string(i), 4) + ".JPG";
-                    
-                vector<unsigned char> image;
-                curlGetBytes(path, image, timeout);
-                images.push_back(image);
+        switch (imageListFrom_) {
+        case JSON: {
+            // JSON media list(http://10.5.5.9/gp/gpMediaList) is NOT WORKING for now(2018.3.6).
+            Json::Value root;
+            Json::Reader reader;
+            std::string mediaList;
+            if (!curlGetText("http://10.5.5.9/gp/gpMediaList", mediaList, 2)) {
+                ROS_ERROR_STREAM("FAILED to get image list!!");
+                return;
             }
+            ROS_DEBUG_STREAM("gpMediaList:" << mediaList);
+
+            if (!mediaList.empty() && reader.parse(mediaList, root))
+                {
+#if 0
+                    const Json::Value media = root["media"][0]["fs"];
+                    const Json::Value lastVal = media[media.size() - 1];
+            
+                    // TODO Check that it's a JPG
+            
+                    int startNum = stoi(lastVal["b"].asString());
+                    int endNum = stoi(lastVal["l"].asString());
+                    for (int i=startNum; i<=endNum; ++i)
+                        {
+                            string path = "http://10.5.5.9/videos/DCIM/100GOPRO/G" +
+                                zeroPaddedIntString(lastVal["g"].asString(), 3) +
+                                zeroPaddedIntString(to_string(i), 4) + ".JPG";
+                            ROS_DEBUG_STREAM("getting: " << path);
+                    
+                            vector<unsigned char> image;
+                            curlGetBytes(path, image, timeout);
+                            images.push_back(image);
+                        }
+#else
+                    // JSON format for now(2018.3.6)
+                    const Json::Value media = root["media"][0]["fs"];
+                    for (int i = 0; i < media.size(); ++i) {
+                        string path = "http://10.5.5.9/videos/DCIM/100GOPRO/" +
+                            media[i]["n"].asString();
+                        ROS_DEBUG_STREAM("getting: " << path);
+                        vector<unsigned char> image;
+                        curlGetBytes(path, image, timeout);
+                        images.push_back(image);
+                    }
+#endif
+                } else {
+                ROS_ERROR_STREAM("empty media list or media list parsing error");
+            }
+        }
+            break;
+        case HTML: {
+            std::string htmlMediaList;
+            if (!curlGetText("http://10.5.5.9/videos/DCIM/100GOPRO/", htmlMediaList, 2)) {
+                ROS_ERROR_STREAM("FAILED to get image list!!");
+                return;
+            }
+            vector<std::string> imageFiles;
+            findImageFiles(htmlMediaList, imageFiles);
+            
+            if (!imageFiles.empty()) {
+                for (int i = 0; i < imageFiles.size(); ++i) {
+                    string path = "http://10.5.5.9/videos/DCIM/100GOPRO/" + imageFiles[i];
+                    ROS_DEBUG_STREAM("getting: " << path);
+                    vector<unsigned char> image;
+                    curlGetBytes(path, image, timeout);
+                    images.push_back(image);
+                }
+            } else {
+                ROS_ERROR_STREAM("empty media list or media list page parsing error");
+            }
+            break;
+        }
         }
     }
 
@@ -203,6 +272,29 @@ namespace gopro_hero
         ostringstream ss;
         ss << setw(pad) << setfill('0') << num;
         return ss.str();
-    }    
-    
+    }
+
+    /// Find image files in html page
+    /// \param htmlMediaList html page contents
+    /// \param[out] imageList images found
+    void GoProHero::findImageFiles(const std::string& htmlMediaList, vector<std::string>& imageFiles)
+    {
+        try {
+            const boost::regex e("GOPR\\d\\d\\d\\d\\.JPG");
+            boost::match_results<std::string::const_iterator> m;
+            std::string::const_iterator start = htmlMediaList.begin();
+            std::string::const_iterator end = htmlMediaList.end();
+
+            while (boost::regex_search(start, end, m, e)) {
+                start = m[0].second;
+                std::string img = htmlMediaList.substr(std::distance(htmlMediaList.begin(), m[0].first), 12);
+                ROS_DEBUG_STREAM("found image:" << img);
+                imageFiles.push_back(img);
+            }
+        }
+        catch (std::exception& e) {
+            cerr << e.what() << endl;
+        }
+    }
+
 }
