@@ -9,6 +9,8 @@ int main(int argc, char* argv[])
     ros::NodeHandle nh;
     GoProHeroNode* node = new GoProHeroNode(nh);
 
+    node->init();
+
     ros::AsyncSpinner spinner(3); // 3 threads?
     spinner.start();
     ros::waitForShutdown();

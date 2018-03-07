@@ -5,6 +5,7 @@
 #include <typeinfo>
 #include <sstream>
 #include <iomanip>
+#include <vector>
 
 #include <curl/curl.h>
 
