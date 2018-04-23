@@ -151,17 +151,29 @@ namespace gopro_hero
     bool GoProHeroNode::triggerShutterCB(gopro_hero_msgs::Shutter::Request& req,
                                          gopro_hero_msgs::Shutter::Response& rsp)
     {
+        ros::Time reqBeginTime = ros::Time::now();
+        ros::Time reqEndTime;
+        ros::Time gotImageTime;
         vector<vector<unsigned char> > images;
         gp_.setMode(req.multishot ? GoProHero::Mode::MULTISHOT : GoProHero::Mode::PHOTO);
         gp_.shutter(true);
+        reqEndTime = ros::Time::now();
         gp_.currentImages(images);
-        
+        gotImageTime = ros::Time::now();
         // Convert image bytes to sensor_msgs/CompressedImage
         for (auto i : images)
         {
-            sensor_msgs::CompressedImage rosImg;rosImg.format = "jpeg"; // TODO parameterize
-            copy(i.begin(), i.end(), back_inserter(rosImg.data));
-            rsp.images.push_back(rosImg);
+            // sensor_msgs::CompressedImage rosImg;rosImg.format = "jpeg";
+            // TODO parameterize
+            // copy(i.begin(), i.end(), back_inserter(rosImg.data));
+            // rsp.images.push_back(rosImg);
+            gopro_hero_msgs::ImageWithTimestamps iwt;
+            iwt.image.format = "jpeg";
+            copy(i.begin(), i.end(), back_inserter(iwt.image.data));
+            iwt.reqBeginTime = reqBeginTime;
+            iwt.reqEndTime = reqEndTime;
+            iwt.gotImageTime = gotImageTime;
+            rsp.iwts.push_back(iwt);
         }
 #ifdef DELETE_ALL_MEDIA
         gp_.deleteAllMedia();

@@ -44,6 +44,7 @@ add_message_files(
   FILES
   Setting.msg
   SettingsMap.msg
+  ImageWithTimestamps.msg
 )
 
 ## Generate services in the 'srv' folder

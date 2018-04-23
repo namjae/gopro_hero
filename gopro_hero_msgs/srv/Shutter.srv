@@ -1,3 +1,6 @@
 bool multishot
 ---
-sensor_msgs/CompressedImage[] images
+# sensor_msgs/CompressedImage[] images
+# std_msgs/Time[] timestamps
+# image + timestamp(s)
+ImageWithTimestamps[] iwts
