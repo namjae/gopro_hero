@@ -38,6 +38,7 @@ namespace gopro_hero
         ros::Subscriber toggleVideoStream_;
         ros::Subscriber cameraSettingsSub_;
         ros::ServiceServer shutterTriggerSrv_;
+        ros::Publisher shutterPub_;
         
         GoProHero gp_;
         GoProHeroStream *gpStream_;
