@@ -6,6 +6,7 @@
 #include "gopro_hero/gopro_hero_node.hpp"
 #include "gopro_hero/gopro_hero.hpp"
 #include "gopro_hero/gopro_hero_commands.hpp"
+#include "gopro_hero_msgs/ShutterTime.h"
 
 #define DELETE_ALL_MEDIA 1
 
@@ -69,7 +70,8 @@ namespace gopro_hero
         shutterTriggerSrv_ = nh_.advertiseService("trigger_shutter", &GoProHeroNode::triggerShutterCB, this);
         // deleteAllMediaSrv_ = nh_.advertiseService("delete_all", &GoProHeroNode::deleteAllMediaCB, this);
 
-        shutterPub_ = nh_.advertise<std_msgs::String>("shutter", 9999);
+        // shutterPub_ = nh_.advertise<std_msgs::String>("shutter", 9999);
+        shutterPub_ = nh_.advertise<::gopro_hero_msgs::ShutterTime>("shutter", 10);
     }
 
     
@@ -154,16 +156,17 @@ namespace gopro_hero
     bool GoProHeroNode::triggerShutterCB(gopro_hero_msgs::Shutter::Request& req,
                                          gopro_hero_msgs::Shutter::Response& rsp)
     {
-        std_msgs::String msg;
-        msg.data = ros::this_node::getName();
+        ::gopro_hero_msgs::ShutterTime st;
+        st.name = ros::this_node::getName();
         ros::Time reqBeginTime = ros::Time::now();
         ros::Time reqEndTime;
         ros::Time gotImageTime;
         vector<vector<unsigned char> > images;
         gp_.setMode(req.multishot ? GoProHero::Mode::MULTISHOT : GoProHero::Mode::PHOTO);
         gp_.shutter(true);
-        shutterPub_.publish(msg);
         reqEndTime = ros::Time::now();
+        st.stamp = reqEndTime;
+        shutterPub_.publish(st);
         gp_.currentImages(images);
         gotImageTime = ros::Time::now();
         // Convert image bytes to sensor_msgs/CompressedImage

@@ -45,6 +45,7 @@ add_message_files(
   Setting.msg
   SettingsMap.msg
   ImageWithTimestamps.msg
+  ShutterTime.msg
 )
 
 ## Generate services in the 'srv' folder
